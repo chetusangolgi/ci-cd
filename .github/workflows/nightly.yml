@@ -1,0 +1,27 @@
+name: Nightly staging tests
+on:
+  schedule:
+    - cron: '0 2 * * *'
+      timezone: Asia/Kolkata
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  staging:
+    runs-on: ubuntu-latest
+    env:
+      STAGING_URL: ${{ vars.STAGING_URL }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check staging URL
+        run: test -n "$STAGING_URL" || { echo 'Set repository variable STAGING_URL'; exit 1; }
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: API end-to-end test
+        run: node tests/nightly-api.js
+      - uses: grafana/setup-k6-action@v1
+      - name: 100 virtual-user checkout test
+        run: k6 run tests/checkout-load.js
