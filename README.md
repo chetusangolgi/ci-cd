@@ -10,7 +10,15 @@ Install Node.js 22 or newer and Docker. Then run:
 docker compose up --build
 ```
 
-Try the three endpoints:
+In PowerShell, try the three endpoints:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri 'http://localhost:3000/cart/add' -ContentType 'application/json' -Headers @{ 'X-Cart-Id' = 'my-cart' } -Body '{"name":"Book","priceCents":1000,"quantity":2}'
+Invoke-RestMethod -Method Get -Uri 'http://localhost:3000/cart' -Headers @{ 'X-Cart-Id' = 'my-cart' }
+Invoke-RestMethod -Method Post -Uri 'http://localhost:3000/checkout' -Headers @{ 'X-Cart-Id' = 'my-cart' }
+```
+
+In a Unix shell, the equivalent commands are:
 
 ```sh
 curl -X POST http://localhost:3000/cart/add -H 'Content-Type: application/json' -H 'X-Cart-Id: my-cart' -d '{"name":"Book","priceCents":1000,"quantity":2}'
@@ -58,7 +66,7 @@ To try the API check locally while the app is running:
 STAGING_URL=http://localhost:3000 node tests/nightly-api.js
 ```
 
-In PowerShell, set the variable with `$env:STAGING_URL = 'http://localhost:3000'` and then run `node tests/nightly-api.js`. The `curl` examples above use Unix shell quoting; in PowerShell, `curl.exe` avoids the `Invoke-WebRequest` alias.
+In PowerShell, set the variable with `$env:STAGING_URL = 'http://localhost:3000'` and then run `node tests/nightly-api.js`. PowerShell's `curl` command resolves to `Invoke-WebRequest`; its `-Headers` parameter expects a hashtable such as `@{ 'X-Cart-Id' = 'my-cart' }`.
 
 If this directory is not yet a Git repository, run `git init -b main`, add and commit the files, create a GitHub repository, and push `main`. After that, create feature branches for the CI exercise.
 
