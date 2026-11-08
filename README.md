@@ -49,12 +49,12 @@ Push this project to GitHub, open a pull request, and watch the **CI / test-and-
 
 ## 4. Configure delivery
 
-[`.github/workflows/cd.yml`](.github/workflows/cd.yml) runs on pushes to `main`. It builds the Dockerfile, publishes `ghcr.io/<owner>/<repo>:latest` and a commit SHA tag, then sends an authenticated JSON POST to a deployment webhook. Set these repository **Actions secrets**:
+[`.github/workflows/cd.yml`](.github/workflows/cd.yml) runs on pushes to `main`. Its `publish` job builds the Dockerfile and publishes `ghcr.io/<owner>/<repo>:latest` and a commit SHA tag. You can inspect the published image under the repository's **Packages** section without setting up a staging host. The `deploy` job runs after publication only when the repository **Actions variable** `DEPLOY_ENABLED` is set to `true`. When you have a staging deployment webhook, set these repository **Actions secrets** before enabling deployment:
 
 - `DEPLOY_WEBHOOK_URL`: HTTPS URL of your staging deployment webhook.
 - `DEPLOY_WEBHOOK_TOKEN`: Bearer token accepted by that webhook.
 
-The POST body is `{"image":"ghcr.io/<owner>/<repo>@sha256:<digest>"}`. Your webhook must verify the token, pull that exact image, restart the staging API, and make MongoDB available through `MONGO_URI`. If the GHCR package is private, the staging host also needs read access to it. The repository does not include a hosting provider because no target server was specified; until the webhook and its secrets exist, CD stops at its configuration check. Protect `main` and require CI before relying on this workflow for deployment.
+The POST body is `{"image":"ghcr.io/<owner>/<repo>@sha256:<digest>"}`. Your webhook must verify the token, pull that exact image, restart the staging API, and make MongoDB available through `MONGO_URI`. If the GHCR package is private, the staging host also needs read access to it. The repository does not include a hosting provider because no target server was specified. With `DEPLOY_ENABLED` unset, CD publishes the image and skips deployment. Protect `main` and require CI before relying on this workflow for deployment.
 
 ## 5. Configure nightly staging checks
 
@@ -74,5 +74,5 @@ If this directory is not yet a Git repository, run `git init -b main`, add and c
 
 1. Run the app and tests locally. Change the GST rate in `src/cart.js` and see the unit test fail; restore it.
 2. Push a branch and open a pull request. Change a test expectation and observe the CI check fail; restore it.
-3. Configure the `main` required check. Merge a passing pull request and inspect the GHCR image and CD run.
-4. Connect a staging webhook, set `STAGING_URL`, and run the nightly workflow manually before waiting for its schedule.
+3. Configure the `main` required check. Merge a passing pull request and inspect the `publish` job and GHCR image in the CD run.
+4. Connect a staging webhook, set `DEPLOY_ENABLED=true` and `STAGING_URL`, then run the nightly workflow manually before waiting for its schedule.

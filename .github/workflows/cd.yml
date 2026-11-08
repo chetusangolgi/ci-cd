@@ -3,25 +3,21 @@ on:
   push:
     branches: [main]
 
-permissions:
-  contents: read
-  packages: write
-
 jobs:
-  publish-and-deploy:
+  publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.image.outputs.ref }}@${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@v7
-      - name: Validate deployment configuration
-        env:
-          DEPLOY_WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
-          DEPLOY_WEBHOOK_TOKEN: ${{ secrets.DEPLOY_WEBHOOK_TOKEN }}
-        run: |
-          test -n "$DEPLOY_WEBHOOK_URL" || { echo 'Set DEPLOY_WEBHOOK_URL'; exit 1; }
-          test -n "$DEPLOY_WEBHOOK_TOKEN" || { echo 'Set DEPLOY_WEBHOOK_TOKEN'; exit 1; }
       - name: Set image name
         id: image
-        run: echo "name=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "name=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "ref=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -37,11 +33,26 @@ jobs:
           tags: |
             ghcr.io/${{ steps.image.outputs.name }}:latest
             ghcr.io/${{ steps.image.outputs.name }}:${{ github.sha }}
+
+  deploy:
+    if: vars.DEPLOY_ENABLED == 'true'
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Validate deployment configuration
+        env:
+          DEPLOY_WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
+          DEPLOY_WEBHOOK_TOKEN: ${{ secrets.DEPLOY_WEBHOOK_TOKEN }}
+        run: |
+          test -n "$DEPLOY_WEBHOOK_URL" || { echo 'Set DEPLOY_WEBHOOK_URL'; exit 1; }
+          test -n "$DEPLOY_WEBHOOK_TOKEN" || { echo 'Set DEPLOY_WEBHOOK_TOKEN'; exit 1; }
       - name: Trigger staging deployment
         env:
           DEPLOY_WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
           DEPLOY_WEBHOOK_TOKEN: ${{ secrets.DEPLOY_WEBHOOK_TOKEN }}
-          IMAGE: ghcr.io/${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}
+          IMAGE: ${{ needs.publish.outputs.image }}
         run: |
           payload=$(jq -n --arg image "$IMAGE" '{image: $image}')
           curl --fail --show-error --silent --retry 3 \
