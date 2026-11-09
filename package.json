@@ -5,7 +5,9 @@
   "scripts": {
     "start": "node src/server.js",
     "test": "jest --runInBand",
-    "test:unit": "jest --runInBand tests/cart.test.js"
+    "test:unit": "jest --runInBand tests/cart.test.js",
+    "test:integration": "jest --runInBand tests/api.test.js",
+    "test:smoke": "node tests/nightly-api.js"
   },
   "engines": {
     "node": ">=22"

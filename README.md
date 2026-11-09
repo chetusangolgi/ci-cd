@@ -30,22 +30,44 @@ The checkout response has `subtotalCents: 2000`, `gstCents: 360`, and `totalCent
 
 For local development without the API container, start MongoDB with `docker compose up -d mongo`, then run `npm ci` and `npm start`. The defaults are `MONGO_URI=mongodb://127.0.0.1:27017`, `MONGO_DB=shopping_cart`, and `PORT=3000`.
 
-## 2. Run the tests
+## 2. Practice every check locally
 
-With local MongoDB running:
+Run these commands in PowerShell from the repository root. Each row matches one CI or nightly check, so you can see which failure belongs to which layer.
 
-```sh
-npm ci
-npm test
+| Check | What it verifies | Local command |
+| --- | --- | --- |
+| Unit | GST calculations in `tests/cart.test.js` | `npm run test:unit` |
+| Integration | API behavior with a real MongoDB in `tests/api.test.js` | `docker compose up -d mongo`, then `npm run test:integration` |
+| Dependency audit | Shipped npm dependencies | `npm audit --omit=dev --audit-level=moderate` |
+| Trivy scan | High or critical file vulnerabilities and secrets | Docker command below |
+| Image build | The production Dockerfile can build | `docker build --tag shopping-cart:ci .` |
+| API smoke | Add, view, checkout, and empty cart over HTTP | Start the app, then `npm run test:smoke` |
+| Load | 100 separate users add and check out | Start the app, then run the k6 Docker command below |
+
+First run `npm ci` to install the test dependencies. `npm test` runs both Jest suites together. The integration test creates and removes its own temporary database; MongoDB must be running for it. The audit command intentionally checks production dependencies; `npm audit` also reports development dependencies.
+
+To run the Trivy scan without installing Trivy locally:
+
+```powershell
+docker run --rm --volume "${PWD}:/project" aquasec/trivy:latest fs --scanners vuln,secret --severity HIGH,CRITICAL --exit-code 1 --skip-dirs node_modules /project
 ```
 
-`tests/cart.test.js` checks GST arithmetic. `tests/api.test.js` uses a real, temporary MongoDB database to check add, view, checkout, and invalid inputs. To run only the unit tests, use `npm run test:unit`.
+To run the HTTP and load checks against the local app:
+
+```powershell
+docker compose up -d --build
+$env:STAGING_URL = 'http://127.0.0.1:3000'
+npm run test:smoke
+docker run --rm --env STAGING_URL=http://host.docker.internal:3000 --volume "${PWD}:/work" --workdir /work grafana/k6 run tests/checkout-load.js
+```
+
+The k6 check writes 100 disposable carts. Docker Desktop makes the host API reachable from the k6 container through `host.docker.internal`. To stop the local app after the exercise, run `docker compose down`.
 
 ## 3. Understand CI
 
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on branch pushes and pull requests targeting `main`. It installs dependencies, audits shipped dependencies, scans files with Trivy for high or critical vulnerabilities and secrets, and runs all tests against a MongoDB service container. `npm audit --omit=dev` deliberately checks the dependency set installed in the production image; Jest's development dependency tree is outside this gate. Review the full development dependency report separately with `npm audit`.
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on branch pushes and pull requests targeting `main`, and can be started manually from the Actions tab. Unit, integration, dependency audit, Trivy scan, and image build run as separate jobs. The integration job starts its own MongoDB service container. The final `test-and-scan` job fails unless every check passes; keep it as the required branch protection check.
 
-Push this project to GitHub, open a pull request, and watch the **CI / test-and-scan** check. To make a failed check block merging, configure a `main` branch ruleset or branch protection rule that requires that status check. A workflow file alone does not enforce merge protection.
+Push this project to GitHub, open a pull request, and inspect the named jobs in **Actions → CI**. To make a failed check block merging, configure a `main` branch ruleset or branch protection rule that requires `test-and-scan`. A workflow file alone does not enforce merge protection.
 
 ## 4. Configure delivery
 
@@ -66,7 +88,7 @@ To try the API check locally while the app is running:
 STAGING_URL=http://localhost:3000 node tests/nightly-api.js
 ```
 
-In PowerShell, set the variable with `$env:STAGING_URL = 'http://localhost:3000'` and then run `node tests/nightly-api.js`. PowerShell's `curl` command resolves to `Invoke-WebRequest`; its `-Headers` parameter expects a hashtable such as `@{ 'X-Cart-Id' = 'my-cart' }`.
+In PowerShell, set the variable with `$env:STAGING_URL = 'http://127.0.0.1:3000'` and then run `npm run test:smoke`. The local k6 command is in section 2. PowerShell's `curl` command resolves to `Invoke-WebRequest`; its `-Headers` parameter expects a hashtable such as `@{ 'X-Cart-Id' = 'my-cart' }`.
 
 If this directory is not yet a Git repository, run `git init -b main`, add and commit the files, create a GitHub repository, and push `main`. After that, create feature branches for the CI exercise.
 
